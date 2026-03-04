@@ -1,5 +1,6 @@
 import { Router, Response } from "express";
 import { requireAuth, AuthRequest } from "../middleware/auth";
+import { createSupabaseAdmin } from "../lib/supabase";
 
 const router = Router();
 
@@ -9,6 +10,7 @@ router.get("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     // TODO: validate id is a valid user ID
     void id;
+    void createSupabaseAdmin; // will be used when implemented
 
     res.status(501).json({ message: "Not implemented yet" });
   } catch (_) {

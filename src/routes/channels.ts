@@ -5,7 +5,7 @@ import { createSupabaseAdmin } from "../lib/supabase";
 const router = Router();
 
 // GET /api/channels
-router.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
+router.get("/", requireAuth, async (_req: AuthRequest, res: Response) => {
   try {
     const supabase = createSupabaseAdmin();
     const { data, error } = await supabase
@@ -24,13 +24,32 @@ router.get("/", requireAuth, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// POST /api/channels/new
+// NOTE: registered before /:id routes so "/new" is not captured as a channel ID
+router.post("/new", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { name } = req.body;
+
+    const nameError = validateChannelName(name);
+    if (nameError) {
+      res.status(400).json({ error: nameError });
+      return;
+    }
+
+    // TODO: ensure user has permission to create channels
+
+    res.status(501).json({ message: "Not implemented yet." });
+  } catch (_) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /api/channels/:id/messages
 router.get("/:id/messages", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const supabase = createSupabaseAdmin();
 
-    // Fetch messages
     const { data: messages, error: msgError } = await supabase
       .from("messages")
       .select("id, user_id, content, created_at, replies_to")
@@ -48,7 +67,6 @@ router.get("/:id/messages", requireAuth, async (req: AuthRequest, res: Response)
       return;
     }
 
-    // Fetch profiles for all unique user_ids in this batch
     const userIds = [...new Set(messages.map((m) => m.user_id))];
     const { data: profiles, error: profileError } = await supabase
       .from("profiles")
@@ -75,31 +93,11 @@ router.get("/:id/messages", requireAuth, async (req: AuthRequest, res: Response)
   }
 });
 
-// POST /api/channels/new
-router.post("/new", requireAuth, async (req: AuthRequest, res: Response) => {
-  try {
-    const { name } = req.body;
-
-    // validate name
-    const nameError = validateChannelName(name);
-    if (nameError) {
-      res.status(400).json({ error: nameError });
-      return;
-    }
-
-    // TODO: ensure user has permission to create channels
-
-    res.status(501).json({ message: "Not implemented yet." });
-  } catch (_) {
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
 // PATCH /api/channels/:id
 router.patch("/:id", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    // TODO: add more body params
+    // TODO: add more body params (name, description, etc.)
     // TODO: ensure user has permission to edit channels
     void id;
 

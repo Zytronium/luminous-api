@@ -36,7 +36,14 @@ app.use(express.json());
 
 // -- Routes --------------------------------------------------------------------
 app.use("/api/auth", authRoutes);
+// Both singular and plural paths are supported to match the original Next.js API:
+//   /api/channel/new, /api/channel/:id/messages, /api/channel/:id  (singular)
+//   /api/channels                                                   (plural list)
+app.use("/api/channel", channelRoutes);
 app.use("/api/channels", channelRoutes);
+//   /api/message/send, /api/message/edit, /api/message/delete, /api/message/react  (singular)
+//   /api/messages/...                                                               (plural alias)
+app.use("/api/message", messageRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/roles", roleRoutes);
 app.use("/api/users", userRoutes);
