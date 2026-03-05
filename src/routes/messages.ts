@@ -42,14 +42,41 @@ router.patch("/edit", requireAuth, async (req: AuthRequest, res: Response) => {
       res.status(400).json({ error: "messageId is required" });
       return;
     }
-    if (!newContent) {
+    if (!newContent?.trim()) {
       res.status(400).json({ error: "newContent is required" });
       return;
     }
 
-    // TODO: ensure user owns the message or has permission to edit it
+    const supabase = createSupabaseAdmin();
 
-    res.status(501).json({ message: "Not implemented yet" });
+    // Fetch the message to verify ownership
+    const { data: message, error: fetchError } = await supabase
+      .from("messages")
+      .select("user_id")
+      .eq("id", messageId)
+      .single();
+
+    if (fetchError || !message) {
+      res.status(404).json({ error: "Message not found" });
+      return;
+    }
+
+    if (message.user_id !== req.userId) {
+      res.status(403).json({ error: "You can only edit your own messages" });
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from("messages")
+      .update({ content: newContent.trim() })
+      .eq("id", messageId);
+
+    if (updateError) {
+      res.status(500).json({ error: updateError.message });
+      return;
+    }
+
+    res.status(200).json({ ok: true });
   } catch (_) {
     res.status(500).json({ error: "Internal server error" });
   }
@@ -65,9 +92,38 @@ router.delete("/delete", requireAuth, async (req: AuthRequest, res: Response) =>
       return;
     }
 
-    // TODO: ensure user owns the message or has permission to delete it
+    const supabase = createSupabaseAdmin();
 
-    res.status(501).json({ message: "Not implemented yet" });
+    // Fetch the message to verify ownership
+    const { data: message, error: fetchError } = await supabase
+      .from("messages")
+      .select("user_id")
+      .eq("id", messageId)
+      .single();
+
+    if (fetchError || !message) {
+      res.status(404).json({ error: "Message not found" });
+      return;
+    }
+
+    // TODO: also allow users with a role that has permission to delete messages
+
+    if (message.user_id !== req.userId) {
+      res.status(403).json({ error: "You can only delete your own messages" });
+      return;
+    }
+
+    const { error: deleteError } = await supabase
+      .from("messages")
+      .delete()
+      .eq("id", messageId);
+
+    if (deleteError) {
+      res.status(500).json({ error: deleteError.message });
+      return;
+    }
+
+    res.status(200).json({ ok: true });
   } catch (_) {
     res.status(500).json({ error: "Internal server error" });
   }
