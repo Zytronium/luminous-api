@@ -1,8 +1,37 @@
 import { Router, Response } from "express";
 import { requireAuth, AuthRequest } from "../middleware/auth";
 import { createSupabaseAdmin } from "../lib/supabase";
+import { SupabaseClient } from "@supabase/supabase-js";
 
 const router = Router();
+
+// Broadcast a realtime event to all subscribers of a chat channel.
+// The server subscribes to the same private channel the clients are on,
+// sends the event, then immediately tears down the channel.
+async function broadcastToChannel(
+  supabase: SupabaseClient,
+  channelId: string,
+  event: "UPDATE" | "DELETE",
+  payload: object
+): Promise<void> {
+  const ch = supabase.channel(`channel:${channelId}:messages`);
+
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error("Realtime subscribe timeout")),
+      5_000
+    );
+    ch.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        clearTimeout(timeout);
+        resolve();
+      }
+    });
+  });
+
+  await ch.send({ type: "broadcast", event, payload });
+  await supabase.removeChannel(ch);
+}
 
 // POST /api/messages/send
 router.post("/send", requireAuth, async (req: AuthRequest, res: Response) => {
@@ -49,10 +78,10 @@ router.patch("/edit", requireAuth, async (req: AuthRequest, res: Response) => {
 
     const supabase = createSupabaseAdmin();
 
-    // Fetch the message to verify ownership
+    // Fetch the message to verify ownership and retrieve channel_id for broadcast
     const { data: message, error: fetchError } = await supabase
       .from("messages")
-      .select("user_id")
+      .select("user_id, channel_id")
       .eq("id", messageId)
       .single();
 
@@ -66,15 +95,22 @@ router.patch("/edit", requireAuth, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    const trimmed = newContent.trim();
+
     const { error: updateError } = await supabase
       .from("messages")
-      .update({ content: newContent.trim() })
+      .update({ content: trimmed, edited_at: new Date().toISOString() })
       .eq("id", messageId);
 
     if (updateError) {
       res.status(500).json({ error: updateError.message });
       return;
     }
+
+    // Broadcast the update so all clients reflect the change in real time
+    await broadcastToChannel(supabase, message.channel_id, "UPDATE", {
+      record: { id: messageId, content: trimmed },
+    });
 
     res.status(200).json({ ok: true });
   } catch (_) {
@@ -94,10 +130,10 @@ router.delete("/delete", requireAuth, async (req: AuthRequest, res: Response) =>
 
     const supabase = createSupabaseAdmin();
 
-    // Fetch the message to verify ownership
+    // Fetch the message to verify ownership and retrieve channel_id for broadcast
     const { data: message, error: fetchError } = await supabase
       .from("messages")
-      .select("user_id")
+      .select("user_id, channel_id")
       .eq("id", messageId)
       .single();
 
@@ -109,7 +145,9 @@ router.delete("/delete", requireAuth, async (req: AuthRequest, res: Response) =>
     // TODO: also allow users with a role that has permission to delete messages
 
     if (message.user_id !== req.userId) {
-      res.status(403).json({ error: "You can only delete your own messages" });
+      res
+        .status(403)
+        .json({ error: "You can only delete your own messages" });
       return;
     }
 
@@ -122,6 +160,11 @@ router.delete("/delete", requireAuth, async (req: AuthRequest, res: Response) =>
       res.status(500).json({ error: deleteError.message });
       return;
     }
+
+    // Broadcast the deletion so all clients remove the message immediately
+    await broadcastToChannel(supabase, message.channel_id, "DELETE", {
+      record: { id: messageId },
+    });
 
     res.status(200).json({ ok: true });
   } catch (_) {
