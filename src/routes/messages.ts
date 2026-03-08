@@ -1,36 +1,42 @@
 import { Router, Response } from "express";
 import { requireAuth, AuthRequest } from "../middleware/auth";
 import { createSupabaseAdmin } from "../lib/supabase";
-import { SupabaseClient } from "@supabase/supabase-js";
 
 const router = Router();
 
-// Broadcast a realtime event to all subscribers of a chat channel.
-// The server subscribes to the same private channel the clients are on,
-// sends the event, then immediately tears down the channel.
+// Broadcast a realtime event via Supabase's HTTP broadcast API.
+// This avoids the server needing to subscribe to a (private) channel,
+// which requires client-side auth the service role key can't satisfy.
 async function broadcastToChannel(
-  supabase: SupabaseClient,
   channelId: string,
   event: "UPDATE" | "DELETE",
   payload: object
 ): Promise<void> {
-  const ch = supabase.channel(`channel:${channelId}:messages`);
+  const supabaseUrl = process.env.SUPABASE_URL!;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-  await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(
-      () => reject(new Error("Realtime subscribe timeout")),
-      5_000
-    );
-    ch.subscribe((status) => {
-      if (status === "SUBSCRIBED") {
-        clearTimeout(timeout);
-        resolve();
-      }
-    });
+  const res = await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceKey}`,
+      apikey: serviceKey,
+    },
+    body: JSON.stringify({
+      messages: [
+        {
+          topic: `channel:${channelId}:messages`,
+          event,
+          payload,
+        },
+      ],
+    }),
   });
 
-  await ch.send({ type: "broadcast", event, payload });
-  await supabase.removeChannel(ch);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Broadcast failed (${res.status}): ${text}`);
+  }
 }
 
 // POST /api/messages/send
@@ -99,7 +105,7 @@ router.patch("/edit", requireAuth, async (req: AuthRequest, res: Response) => {
 
     const { error: updateError } = await supabase
       .from("messages")
-      .update({ content: trimmed, edited_at: new Date().toISOString() })
+      .update({ content: trimmed })
       .eq("id", messageId);
 
     if (updateError) {
@@ -107,13 +113,14 @@ router.patch("/edit", requireAuth, async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    // Broadcast the update so all clients reflect the change in real time
-    await broadcastToChannel(supabase, message.channel_id, "UPDATE", {
+    // Broadcast the update so all connected clients reflect the change instantly
+    await broadcastToChannel(message.channel_id, "UPDATE", {
       record: { id: messageId, content: trimmed },
     });
 
     res.status(200).json({ ok: true });
-  } catch (_) {
+  } catch (err) {
+    console.error("Edit error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -167,7 +174,8 @@ router.delete("/delete", requireAuth, async (req: AuthRequest, res: Response) =>
     });
 
     res.status(200).json({ ok: true });
-  } catch (_) {
+  } catch (err) {
+    console.error("Delete error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
