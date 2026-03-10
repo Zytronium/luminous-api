@@ -149,13 +149,65 @@ router.post("/react", requireAuth, async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    // TODO: validate messageId is a valid ID
-    // TODO: ensure emoji is a valid emoji
+    if (!isSingleEmoji(emoji)) {
+      res.status(400).json({ error: "invalid emoji" });
+      return;
+    }
 
-    res.status(501).json({ message: "Not implemented yet." });
+    const supabase = createSupabaseAdmin();
+
+    // Check if reaction already exists
+    const { data: existing } = await supabase
+      .from("message_reactions")
+      .select("message_id")
+      .eq("message_id", messageId)
+      .eq("user_id", req.userId)
+      .eq("emoji", emoji)
+      .maybeSingle();
+
+    if (existing) {
+      // Remove the existing reaction
+      const { error: deleteError } = await supabase
+        .from("message_reactions")
+        .delete()
+        .eq("message_id", messageId)
+        .eq("user_id", req.userId)
+        .eq("emoji", emoji);
+
+      if (deleteError) {
+        res.status(500).json({ error: deleteError.message });
+        return;
+      }
+
+      res.status(200).json({ ok: true, action: "removed" });
+    } else {
+      // Add the reaction
+      const { error } = await supabase
+        .from("message_reactions")
+        .insert({ message_id: messageId, user_id: req.userId, emoji });
+
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+
+      res.status(201).json({ ok: true, action: "added" });
+    }
   } catch (_) {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+function isSingleEmoji(str: string): boolean {
+  const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
+  const segments = [...segmenter.segment(str)];
+
+  return segments.length === 1 && isEmoji(segments[0].segment);
+}
+
+function isEmoji(str: string): boolean {
+  const emojiRegex = /^\p{Emoji}$/u;
+  return emojiRegex.test(str);
+}
 
 export default router;
