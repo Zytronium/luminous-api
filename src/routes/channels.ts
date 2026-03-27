@@ -55,7 +55,7 @@ router.get("/:id/messages", requireAuth, async (req: AuthRequest, res: Response)
       .select("id, user_id, content, created_at, replies_to")
       .eq("channel_id", id)
       .order("created_at", { ascending: true })
-      .limit(100);
+      .limit(250);
 
     if (msgError) {
       res.status(500).json({ error: msgError.message });
