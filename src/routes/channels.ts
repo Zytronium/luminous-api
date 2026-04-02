@@ -48,14 +48,16 @@ router.post("/new", requireAuth, async (req: AuthRequest, res: Response) => {
 router.get("/:id/messages", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const mode = (req.query.mode as string) || "legacy";
+    const isStandard = mode === "standard";
     const supabase = createSupabaseAdmin();
 
-    const { data: messages, error: msgError } = await supabase
-      .from("messages")
-      .select("id, user_id, content, created_at, replies_to")
-      .eq("channel_id", id)
-      .order("created_at", { ascending: true })
-      .limit(250);
+    const {data: messages, error: msgError} = await supabase
+        .from("messages")
+        .select("id, user_id, content, created_at, replies_to")
+        .eq("channel_id", id)
+        .order("created_at", {ascending: !isStandard})
+        .limit(isStandard ? 50 : 250);
 
     if (msgError) {
       res.status(500).json({ error: msgError.message });
