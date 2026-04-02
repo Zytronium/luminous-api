@@ -56,8 +56,8 @@ router.get("/:id/messages", requireAuth, async (req: AuthRequest, res: Response)
         .from("messages")
         .select("id, user_id, content, created_at, replies_to")
         .eq("channel_id", id)
-        .order("created_at", { ascending: !before })
-        .limit(before ? 50 : 250);
+        .order("created_at", { ascending: false })
+        .limit(before ? 50 : 250); // load 250 instead of 50 messages for legacy API calls that don't support infinite scrolling
 
     if (before) {
       // Get the timestamp of the "before" (cursor) message and fetch messages older than it
@@ -71,7 +71,7 @@ router.get("/:id/messages", requireAuth, async (req: AuthRequest, res: Response)
         query = query.lt("created_at", cursor.created_at);
     }
 
-    let { data: messages, error: msgError } = await query;
+    const { data: messages, error: msgError } = await query;
 
     if (msgError) {
       res.status(500).json({ error: msgError.message });
@@ -98,11 +98,7 @@ router.get("/:id/messages", requireAuth, async (req: AuthRequest, res: Response)
       (profiles ?? []).map((p) => [p.id, p.display_name])
     );
 
-    if (before)
-      messages = messages.reverse();
-
-
-    const result = messages.map((m) => ({
+    const result = messages.reverse().map((m) => ({
       ...m,
       profiles: { display_name: profileMap[m.user_id] ?? "Unknown" },
     }));
