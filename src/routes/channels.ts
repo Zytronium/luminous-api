@@ -48,16 +48,30 @@ router.post("/new", requireAuth, async (req: AuthRequest, res: Response) => {
 router.get("/:id/messages", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const mode = (req.query.mode as string) || "legacy";
-    const isStandard = mode === "standard";
+    const before = (req.query.before as string) || undefined; // Msg cursor ID | Also used to know if this is a legacy API call or not
+
     const supabase = createSupabaseAdmin();
 
-    const {data: messages, error: msgError} = await supabase
+    let query = supabase
         .from("messages")
         .select("id, user_id, content, created_at, replies_to")
         .eq("channel_id", id)
-        .order("created_at", {ascending: !isStandard})
-        .limit(isStandard ? 50 : 250);
+        .order("created_at", { ascending: !before })
+        .limit(before ? 50 : 250);
+
+    if (before) {
+      // Get the timestamp of the "before" (cursor) message and fetch messages older than it
+      const { data: cursor } = await supabase
+          .from("messages")
+          .select("created_at")
+          .eq("id", before)
+          .single();
+
+      if (cursor)
+        query = query.lt("created_at", cursor.created_at);
+    }
+
+    let { data: messages, error: msgError } = await query;
 
     if (msgError) {
       res.status(500).json({ error: msgError.message });
@@ -83,6 +97,10 @@ router.get("/:id/messages", requireAuth, async (req: AuthRequest, res: Response)
     const profileMap = Object.fromEntries(
       (profiles ?? []).map((p) => [p.id, p.display_name])
     );
+
+    if (before)
+      messages = messages.reverse();
+
 
     const result = messages.map((m) => ({
       ...m,
