@@ -48,16 +48,26 @@ router.post("/new", requireAuth, async (req: AuthRequest, res: Response) => {
 router.get("/:id/messages", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const before = (req.query.before as string) || undefined; // Msg cursor ID | Also used to know if this is a legacy API call or not
-
+    const before = (req.query.before as string) || undefined; // Msg cursor ID
+    let count: string | number = (req.query.count as string) || "250"; // Number of messages to load, defaults to 250 if not specified
     const supabase = createSupabaseAdmin();
+
+    // Ensure given value is an integer, default to 50 if not.
+    if (isNaN(parseInt(count)))
+      count = 50
+    else
+      count = parseInt(count);
+
+    // Limit max count to 250
+    if (count > 250)
+      count = 250;
 
     let query = supabase
         .from("messages")
         .select("id, user_id, content, created_at, replies_to")
         .eq("channel_id", id)
         .order("created_at", { ascending: false })
-        .limit(before ? 50 : 250); // load 250 instead of 50 messages for legacy API calls that don't support infinite scrolling
+        .limit(count);
 
     if (before) {
       // Get the timestamp of the "before" (cursor) message and fetch messages older than it
