@@ -15,19 +15,18 @@ router.post("/send", requireAuth, async (req: AuthRequest, res: Response) => {
     }
 
     const supabase = createSupabaseAdmin();
-    const { error } = await supabase.from("messages").insert({
-      channel_id: channelId,
-      user_id: req.userId,
-      content: content.trim(),
-      replies_to: repliesTo ?? null,
-    });
+    const { data: inserted, error } = await supabase
+        .from("messages")
+        .insert({ channel_id: channelId, user_id: req.userId, content: content.trim(), replies_to: repliesTo ?? null })
+        .select("id")
+        .single();
 
     if (error) {
       res.status(500).json({ error: error.message });
       return;
     }
 
-    res.status(201).json({ ok: true });
+    res.status(201).json({ ok: true, id: inserted.id });
   } catch (_) {
     res.status(500).json({ error: "Internal server error" });
   }
