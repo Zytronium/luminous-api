@@ -117,10 +117,10 @@ router.get("/:id/roles", requireAuth, async (req: AuthRequest, res: Response) =>
     }
 
     const { data, error } = await supabase
-      .from("user_role")
-      .select("role:roles(id, name, description, priority, color, is_default), assigned_at, assigned_by")
-      .eq("user_id", id)
-      .order("roles(priority)", { ascending: false });
+        .from("user_role")
+        .select("role:roles(id, name, description, priority, color, is_default, permissions), assigned_at, assigned_by")
+        .eq("user_id", id)
+        .order("priority", { foreignTable: "roles", ascending: false });
 
     if (error) {
       res.status(500).json({ error: error.message });

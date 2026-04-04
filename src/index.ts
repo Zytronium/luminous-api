@@ -6,6 +6,7 @@ import authRoutes from "./routes/auth";
 import channelRoutes from "./routes/channels";
 import messageRoutes from "./routes/messages";
 import roleRoutes from "./routes/roles";
+import permissionRoutes from "./routes/permissions";
 import userRoutes from "./routes/users";
 
 const app = express();
@@ -46,6 +47,7 @@ app.use("/api/channels", channelRoutes);
 app.use("/api/message", messageRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/roles", roleRoutes);
+app.use("/api/permissions", permissionRoutes);
 app.use("/api/users", userRoutes);
 
 // -- Health check --------------------------------------------------------------
