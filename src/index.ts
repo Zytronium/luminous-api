@@ -8,6 +8,7 @@ import messageRoutes from "./routes/messages";
 import roleRoutes from "./routes/roles";
 import permissionRoutes from "./routes/permissions";
 import userRoutes from "./routes/users";
+import ogRoutes from "./routes/og";
 
 const app = express();
 const PORT = process.env.PORT ?? 4000;
@@ -49,6 +50,7 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/roles", roleRoutes);
 app.use("/api/permissions", permissionRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/og", ogRoutes);
 
 // -- Health check --------------------------------------------------------------
 app.get("/health", (_req, res) => {
