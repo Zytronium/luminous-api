@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import { requireAuth, AuthRequest } from "../middleware/auth";
 import { createSupabaseAdmin } from "../lib/supabase";
+import { sendWebPushToUsers } from "./push";
 
 const router = Router();
 
@@ -26,7 +27,47 @@ router.post("/send", requireAuth, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    // Web Push fanout
+    // Runs in the background, we've already responded to the client, so a slow
+    // or failed push delivery never blocks or errors the send request.
     res.status(201).json({ ok: true, id: inserted.id });
+
+    void (async () => {
+      try {
+        // Fetch channel name + all members who have access to this channel.
+        // We notify every member except the sender; the service worker /
+        // Electron side decides whether to actually surface the notification
+        // based on the user's own preference settings.
+        const [{ data: channel }, { data: members }] = await Promise.all([
+          supabase.from("channels").select("name").eq("id", channelId).single(),
+          supabase.from("channel_members").select("user_id").eq("channel_id", channelId),
+        ]);
+
+        if (!members?.length) return;
+
+        const { data: senderProfile } = await supabase
+          .from("profiles")
+          .select("display_name")
+          .eq("id", req.userId)
+          .single();
+
+        const senderName = senderProfile?.display_name ?? "Someone";
+        const channelName = channel?.name ?? "unknown";
+
+        await sendWebPushToUsers(
+          members.map((m) => m.user_id),
+          req.userId!,
+          {
+            title: `${senderName} (#${channelName})`,
+            body: content.trim(),
+            channelId,
+            messageId: inserted.id,
+          },
+        );
+      } catch (err) {
+        console.error("Web Push fanout error:", err);
+      }
+    })();
   } catch (_) {
     res.status(500).json({ error: "Internal server error" });
   }

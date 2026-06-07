@@ -9,6 +9,7 @@ import roleRoutes from "./routes/roles";
 import permissionRoutes from "./routes/permissions";
 import userRoutes from "./routes/users";
 import ogRoutes from "./routes/og";
+import pushRoutes from "./routes/push";
 
 const app = express();
 const PORT = process.env.PORT ?? 4000;
@@ -36,7 +37,14 @@ app.use(
 // -- Body parsing --------------------------------------------------------------
 app.use(express.json());
 
+app.use((req, _res, next) => {
+    console.log(`${req.method} ${req.path}`);
+    next();
+});
+
 // -- Routes --------------------------------------------------------------------
+app.use("/api/push", pushRoutes);
+console.log("push routes loaded");
 app.use("/api/auth", authRoutes);
 // Both singular and plural paths are supported to match the original Next.js API:
 //   /api/channel/new, /api/channel/:id/messages, /api/channel/:id  (singular)
@@ -60,6 +68,11 @@ app.get("/health", (_req, res) => {
 // -- 404 fallback --------------------------------------------------------------
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });
+});
+
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error("Unhandled error:", err);
+    res.status(500).json({ error: err?.message ?? "Internal server error" });
 });
 
 app.listen(PORT, () => {
