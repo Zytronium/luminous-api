@@ -40,7 +40,7 @@ router.post("/send", requireAuth, async (req: AuthRequest, res: Response) => {
         // based on the user's own preference settings.
         const [{ data: channel }, { data: members }] = await Promise.all([
           supabase.from("channels").select("name").eq("id", channelId).single(),
-          supabase.from("channel_members").select("user_id").eq("channel_id", channelId),
+          supabase.from("profiles").select("id"),
         ]);
 
         if (!members?.length) return;
@@ -55,7 +55,7 @@ router.post("/send", requireAuth, async (req: AuthRequest, res: Response) => {
         const channelName = channel?.name ?? "unknown";
 
         await sendWebPushToUsers(
-          members.map((m) => m.user_id),
+          members.map((m) => m.id),
           req.userId!,
           {
             title: `${senderName} (#${channelName})`,

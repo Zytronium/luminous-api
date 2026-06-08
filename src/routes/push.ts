@@ -99,7 +99,12 @@ export async function sendWebPushToUsers(
     },
 ): Promise<void> {
     const targets = recipientUserIds.filter((id) => id !== excludeUserId);
-    if (targets.length === 0) return;
+    if (targets.length === 0) {
+        console.log(`[WebPush] Skipping send since there are no targets for message ${payload.messageId}`);
+        return;
+    }
+
+    console.log(`[WebPush] Sending to ${targets.length} targets for message ${payload.messageId}`);
 
     const supabase = createSupabaseAdmin();
     const { data: subs, error } = await supabase
