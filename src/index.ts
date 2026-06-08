@@ -44,7 +44,6 @@ app.use((req, _res, next) => {
 
 // -- Routes --------------------------------------------------------------------
 app.use("/api/push", pushRoutes);
-console.log("push routes loaded");
 app.use("/api/auth", authRoutes);
 // Both singular and plural paths are supported to match the original Next.js API:
 //   /api/channel/new, /api/channel/:id/messages, /api/channel/:id  (singular)
